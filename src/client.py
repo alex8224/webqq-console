@@ -19,8 +19,8 @@ from colorama import Fore
 |            | 1. 普通消息            |
 |            | 2. 窗口抖动消息        |
 |            | 3. 群消息              |
-|            | 4. 注销消息            | 
-|            | 5. 图片消息            | 
+|            | 4. 注销消息            |
+|            | 5. 图片消息            |
 +============+========================+
 | int32      | 消息接受者长度         |
 +------------+------------------------+
@@ -48,7 +48,7 @@ class Chat(object):
 
     def __init__(self):
         self.lastfriend = ""
-        self.conn = Redis(host="localhost")
+        self.conn = Redis(host="localhost", db=10)
         self.runflag = True
 
     def executecmd(self, cmd, param):
@@ -70,7 +70,7 @@ class Chat(object):
         elif cmd == "stat":
             onlinecount = self.conn.llen("onlinefriends")
             guy = self.conn.hget("onlineguys",param)
-            if guy: 
+            if guy:
                 print(Fore.YELLOW + guy + Fore.RESET)
 
         elif cmd == "image":
@@ -120,7 +120,7 @@ class Chat(object):
                 return
 
             msgtype = GRPMESSAGE if to.find("_") > -1 else MESSAGE
-            self.sendto(msgtype, to, body)    
+            self.sendto(msgtype, to, body)
 
     def sendto(self, msgtype, to, message):
 
@@ -131,7 +131,7 @@ class Chat(object):
         else:
             if not to: return
             tolen, messagelen = len(to), len(message)
-            
+
             if msgtype in  (MESSAGE, GRPMESSAGE, IMAGEMESSAGE):
                 bytemsg = struct.pack("iii%ss%ss" % (tolen, messagelen), msgtype, tolen, messagelen, to, message)
 
@@ -162,7 +162,7 @@ class Chat(object):
             message = raw_input("=>%s: " % (self.lastfriend))
             self.parsecmd(message)
             print("")
- 
+
 if __name__ == '__main__':
 
     Chat().getfriends().chat()
