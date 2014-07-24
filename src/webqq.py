@@ -3,7 +3,7 @@
 #
 #Author: alex8224@gmail.com birdaccp@gmail.com
 #Create by:2014-07-23 17:58:44
-#Last modified:2014-07-24 18:28:48
+#Last modified:2014-07-24 18:29:57
 #Filename:webqq.py
 #Description: webqq-cli v0.2
 
@@ -954,12 +954,12 @@ class WebQQ(object):
 
         self.runflag = True
         self.login().login1().login2().get_friends().build_groupinfo()
-        #self.taskpool.spawn(self.send_message)
-        #self.taskpool.spawn(self.poll_message)
-        #self.taskpool.spawn(self.poll_online_friends)
+        self.taskpool.spawn(self.send_message)
+        self.taskpool.spawn(self.poll_message)
+        self.taskpool.spawn(self.poll_online_friends)
 
-        #self.installsignal()
-        #self.taskpool.join()
+        self.installsignal()
+        self.taskpool.join()
 
     def stop(self):
         self.logout()
