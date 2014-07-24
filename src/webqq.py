@@ -3,7 +3,7 @@
 #
 #Author: alex8224@gmail.com birdaccp@gmail.com
 #Create by:2014-07-23 17:58:44
-#Last modified:2014-07-24 18:24:46
+#Last modified:2014-07-24 18:28:48
 #Filename:webqq.py
 #Description: webqq-cli v0.2
 
@@ -590,16 +590,10 @@ class WebQQ(object):
             self.groupinfo[group["code"]] = group
             self.groupinfo[group["name"]] = group
             self.redisconn.lpush("groups","%d_%s" % (friendindex+1, group["name"]))
-            #groupinfo = self.sendget(
-            #        "http://s.web2.qq.com/api/get_group_info_ext2?gcode=%s&vfwebqq=%s&t=%s" % (group["code"], self.vfwebqq, ctime()),
-            #        headers = {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"}
-            #    )
-            self.session.headers["Referer"] = "http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"
-            groupinfo = self.session.get(
-                    "http://s.web2.qq.com/api/get_group_info_ext2?gcode=%s&vfwebqq=%s&t=%s" % (group["code"], self.vfwebqq, ctime())
-                ).text
-            #groupinfo = eval(groupinfo)
-            print groupinfo, type(groupinfo)
+            groupinfo = self.sendget(
+                    "http://s.web2.qq.com/api/get_group_info_ext2?gcode=%s&vfwebqq=%s&t=%s" % (group["code"], self.vfwebqq, ctime()),
+                    headers = {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"}
+                )
             try:
                 membersinfo =  groupinfo["result"]["minfo"]
                 [self.groupmemsinfo.update({member["uin"]:member["nick"].decode("utf-8")}) for member in membersinfo]
@@ -626,7 +620,6 @@ class WebQQ(object):
         self.save_cookies(response.cookies)
 
         content=response.text.split(',')
-        print content
         retcode = content[0][-2:-1]
         self.vcode = content[1][1:-1]
         self.vcode2 = content[2].split("'")[1]
