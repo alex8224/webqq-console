@@ -3,96 +3,63 @@
 #
 #Author: alex8224@gmail.com birdaccp@gmail.com
 #Create by:2014-07-23 17:58:44
-#Last modified:2014-07-23 18:00:09
+#Last modified:2014-07-24 18:24:46
 #Filename:webqq.py
 #Description: webqq-cli v0.2
 
 '''
 使用WEBQQ3.0协议
 '''
+import redis
 import struct
 import requests
+import subprocess
 import traceback
 import qqsetting
 import gevent, greenlet
-import random, json, time, os
+import random, json, time, os, re
 import logging,logging.config
 import urllib, cookielib
 from colorama import init, Fore;init()
 from gevent import monkey, queue, pool;monkey.patch_all(dns = False)
 
-WEBQQ_APPID     = 1003903
-WEBQQ_VERSION   = 'WebQQ3.0'
+WEBQQ_APPID   = 1003903
+WEBQQ_VERSION = 'WebQQ3.0'
 
 def rmfile(filepath):
     if os.path.exists(filepath):
         os.unlink(filepath)
 
 def processopen(param):
-    import subprocess
-    handler = subprocess.Popen(param,
-            shell = True,
-            stdout = subprocess.PIPE
-            )
+    handler = subprocess.Popen(param, shell = True, stdout = subprocess.PIPE)
     retcode = handler.wait()
     return retcode, handler
 
 def formatdate(millseconds):
-    return time.strftime(
-            "%Y-%m-%d %H:%M:%S",
-            time.localtime(long(millseconds))
-            )
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(long(millseconds)))
 
 def getLogger(loggername = "root"):
     logging.config.fileConfig( os.path.join( os.getcwd(),"chatloggin.conf") )
     return logging.getLogger()
 
 def ctime():
-    return str( int( time.time() ) )
+    return str(int(time.time()*1000))
 
 def localetime():
     return time.strftime("%Y-%m-%d %H:%M:%S")
 
 def textoutput(msgtype, messagetext):
-    import re
     highlightre = re.match('(.+ )\[(.+)\](.+)', messagetext)
     if highlightre:
         prefix, who, message = highlightre.groups()
-
         if msgtype == 1:
-            getLogger().info(
-                    Fore.GREEN +
-                    prefix +
-                    who +
-                    Fore.YELLOW+
-                    message +
-                    Fore.RESET + "\n")
-
-        if msgtype == 2:
-            getLogger().info(
-                    Fore.BLUE +
-                    who +
-                    Fore.RESET +
-                    message )
-
-        if msgtype == 3:
-            getLogger().info(
-                   Fore.GREEN +
-                   prefix +
-                   Fore.RED +
-                   who +
-                   Fore.RESET +
-                   message )
-
-        if msgtype == 4:
-            getLogger().info(
-                    Fore.YELLOW +
-                    prefix +
-                    who +
-                    Fore.GREEN +
-                    message +
-                    Fore.RESET + "\n")
-
+            getLogger().info( Fore.GREEN + prefix + who + Fore.YELLOW+ message + Fore.RESET)
+        elif msgtype == 2:
+            getLogger().info( Fore.BLUE + who + Fore.RESET + message )
+        elif msgtype == 3:
+            getLogger().info( Fore.GREEN + prefix + Fore.RED + who + Fore.RESET + message )
+        elif msgtype == 4:
+            getLogger().info( Fore.YELLOW + prefix + who + Fore.GREEN + message + Fore.RESET )
     else:
         getLogger().info(messagetext)
 
@@ -102,7 +69,7 @@ class NotifyOsd(object):
             self.pynotify = __import__("pynotify")
             self.pynotify.init("webqq")
         except ImportError:
-            pass
+            traceback.print_exc()
 
     def notify(self, notifytext, timeout = 3, icon = None, title = "通知"):
         if not self.pynotify:
@@ -117,7 +84,6 @@ class NotifyOsd(object):
 notifyer = NotifyOsd()
 
 class MsgCounter(object):
-
     def __init__(self):
         self.msgindex = random.randint(1, 99999999)
 
@@ -127,20 +93,15 @@ class MsgCounter(object):
 
 MessageIndex = MsgCounter()
 
-
-
 class WebQQException(Exception):pass
 
 class MessageHandner(object):
     ''' 对消息进行处理 '''
-
     def __init__(self, context):
-
         self.context = context
         self.logger = getLogger(loggername = "buddies_status")
 
     def dispatch(self, msgtype, message):
-
         prefixfunc= "on_" + msgtype
         func = getattr(self, prefixfunc) if hasattr(self, prefixfunc) else None
 
@@ -148,21 +109,17 @@ class MessageHandner(object):
             func(message)
 
     def __joinmessage(self, message):
-
         messagebody = "".join(
                 map(
                     lambda item:
                         ":face" + str(item[1]) + ": "
                         if isinstance(item, list) else item, message)
                 )
-
         return messagebody.encode("utf-8")
 
     def on_message(self, message):
-
         fromwho = self.context.get_user_info(message["from_uin"])
         mess = message["content"][1:]
-
         sendtime = formatdate(message["time"])
 
         messagebody = self.__joinmessage(mess)
@@ -177,29 +134,24 @@ class MessageHandner(object):
                             picpath,
                             str(message["from_uin"]),
                             task = self.context.downoffpic
-                            )
-
+                        )
                 elif msgtype == "cface":
                     to, guid, _ = str(message["from_uin"]), msg[1], msg[2]
                     self.context.spawn(to, guid, task = self.context.downcface)
 
         faceuri = self.context.getface(message["from_uin"])
-
         notifyer.notify(
                 "".join(messagebody).encode("utf-8"),
                 title = fromwho,
                 timeout= 5,
                 icon = faceuri
-                )
-
+            )
         textoutput(1,"%s [%s] 说 %s" % ( sendtime, fromwho, messagebody ) )
 
     def on_group_message(self, message):
-
         groupcode = message["group_code"]
         fromwho = self.context.get_member_by_code(message["send_uin"])
         mess = message["content"][1:]
-
         sendtime = formatdate(message["time"])
 
         messagebody = self.__joinmessage(mess)
@@ -207,8 +159,7 @@ class MessageHandner(object):
                 sendtime + " " + self.context.get_groupname_by_code(groupcode),
                 fromwho,
                 messagebody
-                )
-
+            )
         for msg in mess:
             if isinstance(msg, list):
                 msgtype = msg[0]
@@ -223,37 +174,29 @@ class MessageHandner(object):
                             str(gid), str(uin), pichost, hostport,
                             str(fid), filename, vfwebqq,
                             task = self.__downgrppic
-                            )
-
-
+                        )
         textoutput(3,messagebody)
 
     def __downgrppic(self, gin, uin, host, port, fid, filename,vfwebqq):
         '''下载群图片'''
-
-        grouppicurl = "http://webqq.qq.com/cgi-bin/get_group_pic?type=0&gid=%s&uin=%s&rip=%s&rport=%s&fid=%s=&pic=%s&vfwebqq=&%s&t=%s"
-        grouppicurl = grouppicurl % (gin, uin, host, port, fid, urllib.quote(filename), vfwebqq, ctime())
+        grouppicurl = "http://webqq.qq.com/cgi-bin/get_group_pic?type=0&gid=%s&uin=%s&rip=%s&rport=%s&fid=%s=&pic=%s&vfwebqq=&%s&t=%s"  % (gin, uin, host, port, fid, urllib.quote(filename), vfwebqq, ctime())
         fullpath = os.path.abspath(os.path.join(qqsetting.FILEDIR, filename.replace("{","").replace("}","")))
         cmd = "wget -q -O '%s' '%s'" % (fullpath, grouppicurl)
         retcode, handler = processopen(cmd)
-
         if retcode == 0:
-            print("\nfile://" + fullpath)
+            print("\ndowngrppic...file://" + fullpath)
 
     def on_shake_message(self, message):
-
         fromwho = self.context.get_user_info(message["from_uin"])
         textoutput(3, "朋友 [%s] 给你发送一个窗口抖动 :)" % fromwho)
         self.context.write_message(ShakeMessage(message["from_uin"]))
 
     def on_kick_message(self, message):
-
         self.context.logger.info("当前账号已经在别处登陆！")
         notifyer.notify("当前账号已经在别处登陆！")
         self.context.stop()
 
     def on_buddies_status_change(self, message):
-
         fromwho = self.context.get_user_info(message["uin"])
         status  = message["status"].encode("utf-8")
 
@@ -262,6 +205,7 @@ class MessageHandner(object):
             self.context.redisconn.hdel("onlineguys", fromwho)
         else:
             self.context.redisconn.hset("onlineguys",fromwho, status)
+        textoutput(3, "朋友 [%s] %s..." % (fromwho, status))
 
         if qqsetting.CARE_ALL or fromwho in qqsetting.CARE_FRIENDS:
             faceuri = self.context.getface(message["uin"])
@@ -269,12 +213,10 @@ class MessageHandner(object):
             notifyer.notify(logmessage, timeout = 2, icon = faceuri)
 
     def on_input_notify(self, message):
-
         fromwho = self.context.get_user_info(message["from_uin"])
         textoutput(3, "朋友 [%s] 正在打字......" % fromwho)
 
     def on_file_message(self, message):
-
         fromwho = self.context.get_user_info(message["from_uin"])
         if message["mode"] == 'recv':
             filename = message["name"].encode("utf-8")
@@ -290,8 +232,7 @@ class MessageHandner(object):
                     filename,
                     task = self.context.recvfile,
                     linkok = self.on_end_transfile
-                    )
-
+                )
         elif message["mode"] == "refuse":
             textoutput(2, "朋友 [%s] 取消了发送文件" % (fromwho, ))
 
@@ -316,10 +257,7 @@ class MessageHandner(object):
             notifyer.notify("离线文件 %s 下载失败" % filename)
             rmfile(filename)
 
-
-
     def on_push_offfile(self, message):
-
         rkey, ip, port = message["rkey"], message["ip"], message["port"]
         fromwho = self.context.get_user_info(message["from_uin"])
         filename = message["name"]
@@ -331,7 +269,6 @@ class MessageHandner(object):
                 task = self.__downofflinefile)
 
 class QQMessage(object):
-
     def __init__(self, to, messagetext, context = None):
         self.msgtype = 1
         self.to = to
@@ -341,20 +278,16 @@ class QQMessage(object):
         self.url = "http://d.web2.qq.com/channel/send_buddy_msg2"
 
     def encode(self, clientid, psessionid):
-
         content = '''["%s",[]]'''
-        r = json.dumps(
-                {
-                    "to":self.to,
-                    "face":570,
-                    "content":content % self.messagetext,
-                    "msg_id":MessageIndex.get(),
-                    "clientid":clientid,
-                    "psessionid":psessionid
-                } )
-
-        rdict = urllib.quote(r)
-        return "r=%s&clientid=%s&psessionid=%s" % (rdict, clientid, psessionid)
+        r = json.dumps({
+                    "to": self.to,
+                    "face": 570,
+                    "content": content % self.messagetext,
+                    "msg_id": MessageIndex.get(),
+                    "clientid": clientid,
+                    "psessionid": psessionid
+                })
+        return "r=%s&clientid=%s&psessionid=%s" % (urllib.quote(r), clientid, psessionid)
 
     def decode(self):
         return self.to, self.messagetext
@@ -384,7 +317,6 @@ class QQMessage(object):
 
 class ImageMessage(QQMessage):
     '''发送图片'''
-
     def __init__(self, to, imagefile, context = None):
         super(ImageMessage, self).__init__(to, "", context)
         self.context = context
@@ -407,20 +339,12 @@ class ImageMessage(QQMessage):
                 "filename"        : os.path.basename(self.imagefile)
                 }
 
-        self.formdata = " ".join(
-                (
-                    "--form-string '%s=%s'" % (k, str(v))
-                    for k, v in formdata.iteritems()
-                )
-                )
+        self.formdata = " ".join((
+                "--form-string '%s=%s'" % (k, str(v)) for k, v in formdata.iteritems()
+            ))
 
-        cmd = "curl -s %s -F 'file=@%s' '%s'" % (
-                self.formdata,
-                self.imagefile,
-                uploadurl )
-
+        cmd = "curl -s %s -F 'file=@%s' '%s'" % (self.formdata, self.imagefile, uploadurl)
         retcode, uploadhandler = processopen(cmd)
-
         if retcode == 0:
             response = uploadhandler.stdout.read()
             print(response)
@@ -437,41 +361,35 @@ class ImageMessage(QQMessage):
         picsize = upinfo["filesize"]
 
         content = '''[["offpic","%s","%s",%d],[]]'''
-        r = json.dumps(
-                {
+        r = json.dumps({
                     "to":self.to,
                     "face":570,
                     "content":content % (picpath, picname, picsize),
                     "msg_id":MessageIndex.get(),
                     "clientid":clientid,
                     "psessionid":psessionid
-                } )
-        rdict = urllib.quote(r)
-        return "r=%s&clientid=%s&psessionid=%s" %(rdict, clientid, psessionid)
+                })
+        return "r=%s&clientid=%s&psessionid=%s" %(urllib.quote(r), clientid, psessionid)
 
 class GroupMessage(QQMessage):
     '''
     群消息
     '''
     def __init__(self, to, messagetext, context=None):
-
         super(GroupMessage, self).__init__(to, messagetext, context)
         self.url = "http://d.web2.qq.com/channel/send_qun_msg2"
 
     def encode(self, clientid, psessionid):
-
         groupuin = self.context.get_uin_by_groupname(self.to)
         content = '''["%s"]''' % self.messagetext
-        r = json.dumps(
-                {
+        r = json.dumps({
                     "group_uin":groupuin,
                     "content": content,
                     "msg_id":MessageIndex.get(),
                     "clientid":clientid,
                     "psessionid":psessionid
                 })
-        rdict = urllib.quote(r)
-        return "r=" + rdict + "&clientid=" + clientid + "&psessionid=" + psessionid
+        return "r=%s&clientid=%s&psessionid=%s" % (urllib.quote(r), clientid, psessionid)
 
     def __str__(self):
         return "send group message %s to %s " % (self.messagetext, self.to)
@@ -489,11 +407,8 @@ class ShakeMessage(QQMessage):
         print "shake message send failed!"
 
     def send(self, context, clientid, psessionid):
-        url = "http://d.web2.qq.com/channel/shake2?to_uin="+str(self.to)\
-                +"&clientid="+clientid+"&psessionid="+psessionid+"&t="+ctime()
-
         return context.spawn(
-                url,
+                "http://d.web2.qq.com/channel/shake2?to_uin=%s&clientid=%s&psessionid=%s&t=%s" % (self.to, clientid, psessionid, ctime()),
                 task = context.sendget,
                 linkfailed = self.sendFailed )
 
@@ -502,16 +417,14 @@ class ShakeMessage(QQMessage):
 
 class KeepaliveMessage(QQMessage):
     ''' 心跳消息 '''
-
     def __init__(self):
         self.msgtype = 3
 
     def sendFailed(self, result):pass
 
     def send(self, context):
-        url = "http://webqq.qq.com/web2/get_msg_tip?uin=&tp=1&id=0&retype=1&rc=2&lv=3&t="+ctime()
         return context.spawn(
-                url,
+                "http://webqq.qq.com/web2/get_msg_tip?uin=&tp=1&id=0&retype=1&rc=2&lv=3&t=%s" % ctime(),
                 task = context.sendget,
                 linkfailed = self.sendFailed )
 
@@ -523,12 +436,9 @@ class LogoutMessage(QQMessage):
         self.msgtype = 4
 
     def send(self, context, clientid, psessionid):
-        logouturl = "http://d.web2.qq.com/channel/logout2?ids=&clientid="\
-                +clientid+"&psessionid="+psessionid+"&t="+str(time.time())
-
         return context.spawn(
-                logouturl,
-                task = context.sendget )
+                "http://d.web2.qq.com/channel/logout2?ids=&clientid=%s&psessionid=%s&t=%s" % (clientid, psessionid, ctime()),
+                task = context.sendget)
 
 class StatusChangeMessage(QQMessage):
     '''状态变更消息'''
@@ -542,12 +452,9 @@ class StatusChangeMessage(QQMessage):
         pass
 
 class MessageFactory(object):
-
     @staticmethod
     def getMessage(webcontext, message):
-
         msgtype = struct.unpack("i", message[:4])[0]
-
         sendtime = localetime()
         if msgtype == 1:
             tolen, bodylen = struct.unpack("ii", message[4:12])
@@ -555,25 +462,21 @@ class MessageFactory(object):
             uin = webcontext.get_uin_by_name(to)
             textoutput(4, "%s [对%s] 说 %s" % (sendtime, to, body))
             return QQMessage(uin, body.decode("utf-8"), context = webcontext)
-
-        if msgtype == 2:
+        elif msgtype == 2:
             tolen = struct.unpack("i", message[4:8])
             to = struct.unpack("%ss" % tolen, message[8:])
             to = to[0]
             uin = webcontext.get_uin_by_name(to)
             return ShakeMessage(uin)
-
-        if msgtype == 3:
+        elif msgtype == 3:
             tolen, bodylen = struct.unpack("ii", message[4:12])
             to, body = struct.unpack("%ss%ss" % (tolen, bodylen), message[12:])
             textoutput(4,"%s [对%s] 说 %s" % (sendtime, to, body))
             to = to[to.find("_")+1:]
             return GroupMessage(to, body.decode("utf-8"), context = webcontext)
-
-        if msgtype == 4:
+        elif msgtype == 4:
             return LogoutMessage()
-
-        if msgtype == 5:
+        elif msgtype == 5:
             tolen, bodylen = struct.unpack("ii", message[4:12])
             to, body = struct.unpack("%ss%ss" % (tolen, bodylen), message[12:])
             uin = webcontext.get_uin_by_name(to)
@@ -582,7 +485,7 @@ class MessageFactory(object):
 class WebQQ(object):
     def __init__(self, qqno, qqpwd, handler=None):
         self.handler = handler if handler else MessageHandner(self)
-        self.uin = qqno
+        self.uin = self.qq = qqno
         self.qqpwd = qqpwd
         self.ptwebqq = ""
         self.psessionid = ""
@@ -590,54 +493,26 @@ class WebQQ(object):
         self.vfwebqq = ""
         self.vcode = ""
         self.vcode2 = ""
-        self.cookiefile = "/tmp/cookies.lwp"
-        self.cookiejar = cookielib.LWPCookieJar(filename=self.cookiefile)
+        self.cookiesfile = "/tmp/cookies.lwp"
+        self.cookiejar = cookielib.LWPCookieJar(filename=self.cookiesfile)
         self.fakeid = ""
         self.friends = None
-        self.friendindex = 1
         self.uintoqq = {}
         self.referurl = "http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=2"
         self.headers = {
                 "User-Agent": "Mozilla/5.0 (X11; Linux i686; rv:16.0) Gecko/20100101 Firefox/16.0",
-                "Referer": "http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=2",
+                "Referer": self.referurl,
                 "Content-Type": "application/x-www-form-urlencoded"
             }
 
         self.mq = queue.Queue(20)
         self.taskpool = pool.Pool(10)
         self.runflag = False
-        from redis import Redis
-        self.redisconn = Redis(host="localhost", db=10)
+        self.redisconn = redis.Redis(host="localhost", db=10)
         self.logger = getLogger()
 
         self.session = requests.Session()
         self.session.headers = self.headers
-
-    def add_cookie(self, key, value, domain, path='/'):
-        version = 0
-        name = key
-        port = None
-        port_specified=None
-        domain, domain_specified, domain_initial_dot=domain, None, None
-        path, path_specified = path,None
-        secure = None
-        expires = None
-        discard = None
-        comment = None
-        comment_url = None
-        rest = {}
-        c = cookielib.Cookie(version,
-                      name, value,
-                      port, port_specified,
-                      domain, domain_specified, domain_initial_dot,
-                      path, path_specified,
-                      secure,
-                      expires,
-                      discard,
-                      comment,
-                      comment_url,
-                      rest)
-        self.cookiejar.set_cookie(c)
 
     def save_cookies(self, cookiejar):
         for c in cookiejar:
@@ -649,12 +524,7 @@ class WebQQ(object):
         self.cookiejar.save(ignore_discard=True)
 
     @property
-    def load_cookies(self):
-        self.cookiejar.load(ignore_discard=True)
-
-    @property
     def get_hash(self):
-        print 'request_hash....get....', self.uin, self.ptwebqq
         a = self.ptwebqq +"password error"
         k = ""
         while True:
@@ -702,16 +572,12 @@ class WebQQ(object):
                 self.friendinfo[friend["nick"]] = friend["uin"]
                 self.friendinfo[friend["uin"]] = friend["nick"]
 
-
     def build_groupinfo(self):
-        getgroupurl = "http://s.web2.qq.com/api/get_group_name_list_mask2"
-        encodeparams = "r=" + urllib.quote(json.dumps({"hash": self.get_hash, "vfwebqq":self.vfwebqq}))
         response = self.sendpost(
-                getgroupurl,
-                encodeparams,
+                "http://s.web2.qq.com/api/get_group_name_list_mask2",
+                "r=" + urllib.quote(json.dumps({"hash": self.get_hash, "vfwebqq":self.vfwebqq})),
                 {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=3"}
-                )
-
+            )
         self.logger.debug("获取群信息......")
         self.groupinfo = {}
         if response["retcode"] !=0:
@@ -720,20 +586,25 @@ class WebQQ(object):
         grouplist = response["result"]["gnamelist"]
         self.redisconn.delete("groups")
         self.groupmemsinfo = {}
-        for group in grouplist:
+        for friendindex, group in enumerate(grouplist):
             self.groupinfo[group["code"]] = group
             self.groupinfo[group["name"]] = group
-            self.redisconn.lpush("groups","%d_%s" % (self.friendindex, group["name"]))
-            self.friendindex +=1
-            getgroupinfourl = "http://s.web2.qq.com/api/get_group_info_ext2?gcode=%s&vfwebqq=%s&t=%s"
-            header = {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"}
-            groupinfo = self.sendget(getgroupinfourl % (group["code"], self.vfwebqq, ctime()), headers = header)
+            self.redisconn.lpush("groups","%d_%s" % (friendindex+1, group["name"]))
+            #groupinfo = self.sendget(
+            #        "http://s.web2.qq.com/api/get_group_info_ext2?gcode=%s&vfwebqq=%s&t=%s" % (group["code"], self.vfwebqq, ctime()),
+            #        headers = {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"}
+            #    )
+            self.session.headers["Referer"] = "http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"
+            groupinfo = self.session.get(
+                    "http://s.web2.qq.com/api/get_group_info_ext2?gcode=%s&vfwebqq=%s&t=%s" % (group["code"], self.vfwebqq, ctime())
+                ).text
+            #groupinfo = eval(groupinfo)
+            print groupinfo, type(groupinfo)
             try:
                 membersinfo =  groupinfo["result"]["minfo"]
                 [self.groupmemsinfo.update({member["uin"]:member["nick"].decode("utf-8")}) for member in membersinfo]
             except:
                 pass
-
         return self
 
     def login(self):
@@ -755,22 +626,26 @@ class WebQQ(object):
         self.save_cookies(response.cookies)
 
         content=response.text.split(',')
+        print content
         retcode = content[0][-2:-1]
         self.vcode = content[1][1:-1]
         self.vcode2 = content[2].split("'")[1]
-        if retcode !='0':
+        if retcode =='1':
+            with open('/tmp/verify.png','wb') as ff:
+                verify_image_url = 'https://ssl.captcha.qq.com/getimage?aid=%s&uin=%s&cap_cd=%s' % (WEBQQ_APPID, self.uin, self.vcode)
+                ff.write(self.session.get(verify_image_url))
+            os.system('/tmp/verify.png')
+            self.vcode = raw_input('input verify code:').strip()
+        elif retcode > '0':
             raise WebQQException("Get VCODE Failed!")
         return self
 
     def login1(self):
         loginURL='https://ssl.ptlogin2.qq.com/login?u='+ self.uin +'&p='+ self.get_password +'&verifycode='+ self.vcode +'&webqq_type=10&remember_uin=1&login2qq=0&aid=1003903&u1=http%3A%2F%2Fweb2.qq.com%2Floginproxy.html%3Flogin2qq%3D0%26webqq_type%3D10&h=1&ptredirect=0&ptlang=2052&daid=164&from_ui=1&pttype=1&dumy=&fp=loginerroralert&action=4-19-23387&mibao_css=m_webqq&t=1&g=1&js_type=0&js_ver=10079&login_sig='+ self.login_sig +'&pt_uistyle=5'
 
-
         response=self.session.get(loginURL, headers=self.headers)
         self.save_cookies(response.cookies)
-
         content = response.text
-
         retcode, _, _, _, tip, nickname = eval(content[6:-3])
         if retcode != '0':
            raise WebQQException(tip)
@@ -784,7 +659,6 @@ class WebQQ(object):
                 self.ptcz    = cookie.value
             elif cookie.name == 'uin':
                 self.uincode = cookie.value[1:]
-        print self.ptwebqq, self.uincode, self.skey, self.ptcz
 
         check_url = content.split("','")[2]
         if check_url.startswith('http'):
@@ -798,48 +672,46 @@ class WebQQ(object):
         return self
 
     def login2(self):
-        login2url = "http://d.web2.qq.com/channel/login2"
         rdict = json.dumps({
                 "status"     : "online",
                 "ptwebqq"    : self.ptwebqq,
                 "passwd_sig" : "",
                 "clientid"   : self.clientid,
                 "psessionid" : None}
-                )
-
-        post_data = "r=%s&clientid=%s&psessionid=null" %(urllib.quote(rdict), self.clientid)
+            )
         try:
-            self.session.headers['Referer'] = 'http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=3'
             with gevent.Timeout(30):
-                response = json.loads(self.session.post(login2url, data=post_data).text, encoding='utf-8')
+                response = self.sendpost(
+                        "http://d.web2.qq.com/channel/login2",
+                        "r=%s&clientid=%s&psessionid=null" %(urllib.quote(rdict), self.clientid),
+                        headerdict= {"Referer": 'http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=3'}
+                    )
                 if response["retcode"] !=0:
                     raise WebQQException(
                             "login2 failed! errcode=%s, errmsg=%s" %
                             ( response["retcode"], response["errmsg"] )
-                            )
-
+                        )
                 self.vfwebqq = response["result"]["vfwebqq"]
                 self.psessionid = response["result"]["psessionid"]
                 self.fakeid = response["result"]["uin"]
                 self.logger.info("登陆成功！")
             return self
-
         except ValueError:
             raise WebQQException("login2 json format error")
-
         except gevent.timeout.Timeout:
             raise WebQQException("login2 timeout")
 
     def get_friends(self):
-        url = "http://s.web2.qq.com/api/get_user_friends2"
         r = json.dumps({
                 "h": "hello",
                 "hash": self.get_hash,
                 "vfwebqq": self.vfwebqq
             })
-        post_data = urllib.quote("r=%s" % r, safe='=')
-        headers = {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"}
-        self.friends = self.sendpost(url, post_data, headerdict=headers)
+        self.friends = self.sendpost(
+                "http://s.web2.qq.com/api/get_user_friends2",
+                "r=%s" % urllib.quote(r),
+                headerdict = {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"}
+            )
         self.build_userinfo()
 
         if self.friends["retcode"]!=0:
@@ -859,17 +731,13 @@ class WebQQ(object):
                 self.session.headers[k] = v
         try:
             with gevent.Timeout(timeoutsecs):
-                return json.loads( self.session.post(url, data=message).text)
+                return self.session.post(url, data=message).json()
         except ValueError:
             raise WebQQException("json format error")
         except gevent.timeout.Timeout:
             raise WebQQException("sendpost timeout")
         except :
-            raise WebQQException(traceback.print_exc())
-
-
-    def requestwithcookie(self):
-        return self.session
+            raise WebQQException(traceback.format_exc())
 
     def sendget(self, url, headers = {}):
         from httplib import BadStatusLine
@@ -877,7 +745,7 @@ class WebQQ(object):
             try:
                 for headername, headervalue in headers.iteritems():
                     self.session.headers[headername] = headervalue
-                return json.loads(self.session.get(url).text)
+                return self.session.get(url).json()
             except ValueError:
                 raise WebQQException("json format error")
             except BadStatusLine:
@@ -899,13 +767,12 @@ class WebQQ(object):
                     self.cookiesfile,
                     recvonlineurl
                 ))
-
         return basefilename if retcode == 0 else False
 
     def poll_online_friends(self):
-        geturl = "http://d.web2.qq.com/channel/get_online_buddies2?clientid=%s&psessionid=%s&t=1349932882032"
+        geturl = "http://d.web2.qq.com/channel/get_online_buddies2?clientid=%s&psessionid=%s&t=%s"
         try:
-            onlineguys = json.loads(self.session.get(geturl % (self.clientid, self.psessionid)).text)
+            onlineguys = self.sendget(geturl % (self.clientid, self.psessionid, ctime()))
             if not onlineguys:
                 return
 
@@ -917,7 +784,6 @@ class WebQQ(object):
                     markname = self.get_user_info(guy["uin"])
                     self.redisconn.hset("onlineguys", markname, guy["status"])
                 batch.execute()
-
         except WebQQException:
             pass
 
@@ -929,7 +795,7 @@ class WebQQ(object):
         def sendrequest():
             response = ""
             try:
-                response = self.requestwithcookie().get(
+                response = self.session.get(
                         getcfaceurl,
                         timeout = 300
                         ).text
@@ -943,7 +809,7 @@ class WebQQ(object):
                 with open(filename, "w") as cface:
                     cface.write(response)
 
-                textoutput(3, "file://%s " % filename)
+                textoutput(3, "downcface....file://%s " % filename)
                 return True
             except:
                 return False
@@ -955,23 +821,20 @@ class WebQQ(object):
             gevent.sleep(0)
 
     def getqqnumber(self, uin):
-
         qqnumber = self.uintoqq.get(uin, None)
         if qqnumber:
             return qqnumber
-
-        geturl = "http://s.web2.qq.com/api/get_friend_uin2?tuin=%s&verifysession=&type=1&code=&vfwebqq=%s&t=%s"
         try:
-            geturl = geturl % (uin, self.vfwebqq, str(time.time()))
-            header = {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"}
-            response = self.sendget(geturl,headers = header)
+            response = self.sendget(
+                    "http://s.web2.qq.com/api/get_friend_uin2?tuin=%s&verifysession=&type=1&code=&vfwebqq=%s&t=%s" % (uin, self.vfwebqq, str(time.time())),
+                    headers = {"Referer":"http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=1"}
+                )
             if response["retcode"] == 0:
                 qqnumber = response["result"]["account"]
                 self.uintoqq[uin] = qqnumber
                 return qqnumber
         except Exception:
-            import traceback;traceback.print_exc()
-
+            traceback.print_exc()
 
     def getface(self, uin):
         qqnumber = self.getqqnumber(uin)
@@ -987,8 +850,6 @@ class WebQQ(object):
                     facefile.write(response.raw.read())
                 return face
             except:
-                import traceback
-
                 traceback.print_exc()
                 self.logger.error("download %s failed" % getfaceurl)
 
@@ -997,23 +858,16 @@ class WebQQ(object):
                 urllib.quote(url) + "&f_uin=" + fromuin + "&clientid=" + \
                 self.clientid + "&psessionid=" + self.psessionid
         try:
-
-            response = self.session.get(getoffpicurl, stream=True)
-            fd = response.raw
+            response = self.session.get(getoffpicurl, allow_redirects=True, stream=True)
             filename = os.getcwd() + "/" + qqsetting.FILEDIR + "/" + url[1:] + ".jpg"
             with open(filename, "w") as offpic:
-                offpic.write(fd.read())
-
-            textoutput(3, "file://%s " % filename)
-
+                offpic.write(response.raw.read())
+            textoutput(3, "downoffpic...file://%s " % filename)
         except:
-            import traceback
-
             traceback.print_exc()
             self.logger.error("download %s failed" % getoffpicurl)
 
     def send_message(self):
-
          while self.runflag:
             try:
                 message = self.redisconn.lpop("messagepool")
@@ -1026,40 +880,29 @@ class WebQQ(object):
                         continue
 
                     qqmesg.send(self, self.clientid, self.psessionid)
-
                 innermsg = self.mq.get_nowait()
-
                 if isinstance(innermsg, KeepaliveMessage):
                     innermsg.send(self)
                 else:
                     innermsg.send(self, self.clientid, self.psessionid)
-
                 gevent.sleep(0.1)
-
             except gevent.queue.Empty:
                 gevent.sleep(0.1)
-
             except greenlet.GreenletExit:
                 self.logger.info("send_message exitting......")
                 break
             except:
-                import traceback
                 traceback.print_exc()
                 self.stop()
 
     def poll_message(self):
         poll_url = "http://d.web2.qq.com/channel/poll2"
-        rdict = json.dumps(
-                    {
+        rdict = json.dumps({
                     "clientid":self.clientid,
                     "psessionid":self.psessionid,
                     "key":0,"ids":[]
-                    }
-                )
-
-        encodeparams = "r=" + urllib.quote(rdict) + "&clientid=" +\
-                self.clientid + "&psessionid=" + self.psessionid
-
+                })
+        encodeparams = "r=%s&clientid=%s&psessionid=%s" % (urllib.quote(rdict), self.clientid , self.psessionid)
         while self.runflag:
             try:
                 response = self.sendpost(poll_url, encodeparams, timeoutsecs=30)
@@ -1070,28 +913,21 @@ class WebQQ(object):
                     for message in result:
                         poll_type, value = message["poll_type"], message["value"]
                         self.handler.dispatch(poll_type, value)
-
                 elif retcode == 102:
                     print "没收到消息，超时..."
-
-            except WebQQException:
-                pass
 
             except greenlet.GreenletExit:
                 self.logger.info("poll_message exitting......")
                 break
-
             except Exception:
-                import traceback;traceback.print_exc()
+                traceback.print_exc()
 
     def keepalive(self):
         gevent.sleep(0)
         while self.runflag:
             gevent.sleep(60)
             try:
-
                 self.write_message(KeepaliveMessage())
-
             except greenlet.GreenletExit:
                 self.logger.info("Keepalive exitting......")
                 break
@@ -1114,7 +950,6 @@ class WebQQ(object):
 
     def get_uin_by_groupname(self, groupname):
         groupinfo = self.groupinfo.get(groupname.decode("utf-8"), None)
-
         if groupinfo:
             return groupinfo["gid"]
 
@@ -1126,12 +961,12 @@ class WebQQ(object):
 
         self.runflag = True
         self.login().login1().login2().get_friends().build_groupinfo()
-        self.taskpool.spawn(self.send_message)
-        self.taskpool.spawn(self.poll_message)
-        self.taskpool.spawn(self.poll_online_friends)
+        #self.taskpool.spawn(self.send_message)
+        #self.taskpool.spawn(self.poll_message)
+        #self.taskpool.spawn(self.poll_online_friends)
 
-        self.installsignal()
-        self.taskpool.join()
+        #self.installsignal()
+        #self.taskpool.join()
 
     def stop(self):
         self.logout()
@@ -1140,14 +975,11 @@ class WebQQ(object):
         self.taskpool.join()
 
     def spawn(self, *args, **kwargs):
-
         glet = gevent.spawn(kwargs["task"], *args)
-
         if kwargs.get("linkok"):
             glet.link(kwargs["linkok"])
         if kwargs.get("linkfailed"):
             glet.link_exception(kwargs["linkfailed"])
-
         return glet
 
     def installsignal(self):

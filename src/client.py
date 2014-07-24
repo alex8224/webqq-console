@@ -45,7 +45,6 @@ LOGOUTMESSAGE = 4
 IMAGEMESSAGE = 5
 
 class Chat(object):
-
     def __init__(self):
         self.lastfriend = ""
         self.conn = Redis(host="localhost", db=10)
@@ -68,7 +67,6 @@ class Chat(object):
             print("在线好友 %s%d%s" % (Fore.GREEN, guyscount, Fore.RESET))
 
         elif cmd == "stat":
-            onlinecount = self.conn.llen("onlinefriends")
             guy = self.conn.hget("onlineguys",param)
             if guy:
                 print(Fore.YELLOW + guy + Fore.RESET)
@@ -79,12 +77,11 @@ class Chat(object):
             else:
                 print(Fore.RED+"请先选择朋友或输入图像路径"+Fore.RESET)
 
-        elif cmd == "brocast":
+        elif cmd == "brodcast":
             '''
             {"messagebody":['p1','p2']}
             '''
-            onlinecount = self.conn.llen("onlinefriends")
-            for guy in self.conn.lrange("onlinefriends", 0, onlinecount):
+            for guy in self.conn.lrange("onlinefriends", 0, -1):
                 to = guy[0:guy.find("-")]
                 self.sendto(MESSAGE, to, param)
 
@@ -107,7 +104,6 @@ class Chat(object):
         if cmdmatch:
             _, cmd, param = cmdmatch.groups()
             self.executecmd(cmd, param)
-
         elif msgmatch:
             prefix, remaintext = msgmatch.groups()
             if prefix == "|":
@@ -123,9 +119,7 @@ class Chat(object):
             self.sendto(msgtype, to, body)
 
     def sendto(self, msgtype, to, message):
-
         bytemsg = ""
-
         if msgtype == LOGOUTMESSAGE:
             bytemsg = struct.pack("i", 4)
         else:
@@ -134,16 +128,13 @@ class Chat(object):
 
             if msgtype in  (MESSAGE, GRPMESSAGE, IMAGEMESSAGE):
                 bytemsg = struct.pack("iii%ss%ss" % (tolen, messagelen), msgtype, tolen, messagelen, to, message)
-
             elif msgtype == SHAKEMESSAGE:
                 bytemsg = struct.pack("ii%ss" % tolen, msgtype, tolen, to)
-
         self.conn.lpush("messagepool", bytemsg)
 
     def getfriends(self):
-
-        self.friendsinfo = self.conn.lrange("friends", 0, self.conn.llen("friends"))
-        self.groupsinfo = self.conn.lrange("groups", 0, self.conn.llen("groups"))
+        self.friendsinfo = self.conn.lrange("friends", 0, -1)
+        self.groupsinfo = self.conn.lrange("groups", 0, -1)
         self.friendsinfo.extend(self.groupsinfo)
         return self
 
@@ -155,14 +146,12 @@ class Chat(object):
             pass
 
     def chat(self):
-
         readline.parse_and_bind("tab:complete")
         readline.set_completer(self.completer)
         while self.runflag:
             message = raw_input("=>%s: " % (self.lastfriend))
             self.parsecmd(message)
-            print("")
+            #print("")
 
 if __name__ == '__main__':
-
     Chat().getfriends().chat()
