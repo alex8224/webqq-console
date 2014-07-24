@@ -654,7 +654,6 @@ class WebQQ(object):
 
     @property
     def get_hash(self):
-        print 'request_hash....get....', self.uin, self.ptwebqq
         a = self.ptwebqq +"password error"
         k = ""
         while True:
@@ -784,7 +783,6 @@ class WebQQ(object):
                 self.ptcz    = cookie.value
             elif cookie.name == 'uin':
                 self.uincode = cookie.value[1:]
-        print self.ptwebqq, self.uincode, self.skey, self.ptcz
 
         check_url = content.split("','")[2]
         if check_url.startswith('http'):
