@@ -3,7 +3,7 @@
 #
 #Author: alex8224@gmail.com birdaccp@gmail.com
 #Create by:2014-07-23 17:58:44
-#Last modified:2014-07-25 16:30:57
+#Last modified:2014-07-25 18:00:12
 #Filename:webqq.py
 #Description: webqq-cli v0.2
 
@@ -632,8 +632,8 @@ class WebQQ(object):
             with open('/tmp/verify.png','wb') as ff:
                 verify_image_url = 'https://ssl.captcha.qq.com/getimage?aid=%s&uin=%s&cap_cd=%s' % (WEBQQ_APPID, self.uin, self.vcode)
                 ff.write(self.session.get(verify_image_url))
-            os.system('/tmp/verify.png')
-            self.vcode = raw_input('input verify code:').strip()
+            #os.system('/tmp/verify.png')
+            self.vcode = raw_input("input '/tmp/verify.png' verify code:").strip()
         elif retcode > '0':
             raise WebQQException("Get VCODE Failed!")
         return self
