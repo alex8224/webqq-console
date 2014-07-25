@@ -153,5 +153,6 @@ class Chat(object):
             self.parsecmd(message)
             #print("")
 
-if __name__ == '__main__':
+def main():
     Chat().getfriends().chat()
+

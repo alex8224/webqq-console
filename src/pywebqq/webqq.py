@@ -3,7 +3,7 @@
 #
 #Author: alex8224@gmail.com birdaccp@gmail.com
 #Create by:2014-07-23 17:58:44
-#Last modified:2014-07-24 18:29:57
+#Last modified:2014-07-25 16:30:57
 #Filename:webqq.py
 #Description: webqq-cli v0.2
 
@@ -23,6 +23,9 @@ import urllib, cookielib
 from colorama import init, Fore;init()
 from gevent import monkey, queue, pool;monkey.patch_all(dns = False)
 
+from pkg_resources import resource_filename
+logging_name = resource_filename("pywebqq", "chatloggin.conf")
+
 WEBQQ_APPID   = 1003903
 WEBQQ_VERSION = 'WebQQ3.0'
 
@@ -39,7 +42,8 @@ def formatdate(millseconds):
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(long(millseconds)))
 
 def getLogger(loggername = "root"):
-    logging.config.fileConfig( os.path.join( os.getcwd(),"chatloggin.conf") )
+    #logging.config.fileConfig( os.path.join( os.getcwd(),"chatloggin.conf") )
+    logging.config.fileConfig(logging_name)
     return logging.getLogger()
 
 def ctime():
@@ -68,7 +72,8 @@ class NotifyOsd(object):
         try:
             self.pynotify = __import__("pynotify")
             self.pynotify.init("webqq")
-        except ImportError:
+        except :
+            print "Requires pynotify. sudo apt-get install python-notify."
             traceback.print_exc()
 
     def notify(self, notifytext, timeout = 3, icon = None, title = "通知"):
@@ -728,7 +733,8 @@ class WebQQ(object):
         except ValueError:
             raise WebQQException("json format error")
         except gevent.timeout.Timeout:
-            raise WebQQException("sendpost timeout")
+            pass
+            #raise WebQQException("sendpost timeout")
         except :
             raise WebQQException(traceback.format_exc())
 
@@ -983,7 +989,9 @@ class WebQQ(object):
     def logout(self):
         LogoutMessage().send(self, self.clientid, self.psessionid).get()
 
-if __name__ == '__main__':
+def main():
+    print """ please first use  command `apt-get install python-notify redis-server` """
+    #print 'logging_name.....', logging_name
     from getpass import getpass
     username = raw_input("Username:")
     password = getpass("Password:")
@@ -992,3 +1000,4 @@ if __name__ == '__main__':
         qq.start()
     except WebQQException, ex:
         print(str(ex))
+
